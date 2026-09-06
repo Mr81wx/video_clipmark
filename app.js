@@ -4,7 +4,9 @@ const emptyState = document.querySelector('#emptyState');
 const controls = document.querySelector('#controls');
 const timelineSection = document.querySelector('#timelineSection');
 const scrubber = document.querySelector('#scrubber');
+const backwardButton = document.querySelector('#backwardButton');
 const playButton = document.querySelector('#playButton');
+const forwardButton = document.querySelector('#forwardButton');
 const muteButton = document.querySelector('#muteButton');
 const saveProjectButton = document.querySelector('#saveProjectButton');
 const tagForm = document.querySelector('#tagForm');
@@ -150,6 +152,11 @@ function seekTo(seconds) {
   updateProgress();
 }
 
+function skipBy(seconds) {
+  if (!video.duration) return;
+  seekTo(video.currentTime + seconds);
+}
+
 function renderTags() {
   tagCount.textContent = `${tags.length} 个`;
   tagList.innerHTML = '';
@@ -193,7 +200,9 @@ video.addEventListener('loadedmetadata', () => {
 video.addEventListener('timeupdate', updateProgress);
 video.addEventListener('play', () => { playButton.textContent = 'Ⅱ'; playButton.setAttribute('aria-label', '暂停'); });
 video.addEventListener('pause', () => { playButton.textContent = '▶'; playButton.setAttribute('aria-label', '播放'); });
+backwardButton.addEventListener('click', () => skipBy(-5));
 playButton.addEventListener('click', () => video.paused ? video.play() : video.pause());
+forwardButton.addEventListener('click', () => skipBy(5));
 muteButton.addEventListener('click', () => { video.muted = !video.muted; muteButton.textContent = video.muted ? '◌' : '◖'; });
 saveProjectButton.addEventListener('click', () => saveCurrentProject());
 scrubber.addEventListener('input', () => seekTo(Number(scrubber.value)));
