@@ -16,8 +16,10 @@ const timeline = document.querySelector('#timeline');
 const timelineFill = document.querySelector('#timelineFill');
 const timelineCursor = document.querySelector('#timelineCursor');
 const tagCount = document.querySelector('#tagCount');
+const storagePrefix = 'clipmark:tags:';
 let tags = [];
 let videoUrl = null;
+let activeStorageKey = null;
 
 const formatTime = (seconds) => {
   const total = Math.max(0, Math.floor(seconds || 0));
@@ -25,6 +27,32 @@ const formatTime = (seconds) => {
   const remaining = total % 60;
   return `${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`;
 };
+
+const createStorageKey = (file) => [
+  storagePrefix,
+  file.name,
+  file.size,
+  file.lastModified
+].join(':');
+
+function loadSavedTags(file) {
+  activeStorageKey = createStorageKey(file);
+  try {
+    const savedTags = JSON.parse(localStorage.getItem(activeStorageKey) || '[]');
+    if (!Array.isArray(savedTags)) return [];
+    return savedTags
+      .filter((tag) => Number.isFinite(tag.time) && typeof tag.text === 'string' && tag.text.trim())
+      .map((tag) => ({ time: Math.max(0, tag.time), text: tag.text.trim() }))
+      .sort((first, second) => first.time - second.time);
+  } catch {
+    return [];
+  }
+}
+
+function saveTags() {
+  if (!activeStorageKey) return;
+  localStorage.setItem(activeStorageKey, JSON.stringify(tags));
+}
 
 function updateProgress() {
   const duration = video.duration || 0;
@@ -52,7 +80,7 @@ function renderTags() {
     card.querySelector('time').textContent = formatTime(tag.time);
     card.querySelector('.tag-title').textContent = tag.text;
     main.addEventListener('click', () => { seekTo(tag.time); video.play(); });
-    card.querySelector('.delete-button').addEventListener('click', () => { tags.splice(index, 1); renderTags(); });
+    card.querySelector('.delete-button').addEventListener('click', () => { tags.splice(index, 1); saveTags(); renderTags(); });
     tagList.append(card);
     const marker = document.createElement('button');
     marker.className = 'marker'; marker.type = 'button'; marker.style.left = `${(tag.time / video.duration) * 100}%`;
@@ -69,10 +97,10 @@ videoInput.addEventListener('change', () => {
   if (videoUrl) URL.revokeObjectURL(videoUrl);
   videoUrl = URL.createObjectURL(file);
   video.src = videoUrl;
-  tags = [];
+  tags = loadSavedTags(file);
   document.querySelector('#fileName').textContent = file.name;
   emptyState.hidden = true;
-  tagHint.textContent = '标签将定位到当前播放时间。';
+  tagHint.textContent = tags.length ? `已读取 ${tags.length} 个保存的标签。` : '标签将自动保存到浏览器本地。';
 });
 
 video.addEventListener('loadedmetadata', () => {
@@ -96,5 +124,6 @@ tagForm.addEventListener('submit', (event) => {
   tags.push({ time: video.currentTime, text });
   tags.sort((first, second) => first.time - second.time);
   tagText.value = ''; tagHint.textContent = `已添加：${formatTime(video.currentTime)}`;
+  saveTags();
   renderTags();
 });
