@@ -6,6 +6,7 @@ const timelineSection = document.querySelector('#timelineSection');
 const scrubber = document.querySelector('#scrubber');
 const playButton = document.querySelector('#playButton');
 const muteButton = document.querySelector('#muteButton');
+const saveProjectButton = document.querySelector('#saveProjectButton');
 const tagForm = document.querySelector('#tagForm');
 const tagText = document.querySelector('#tagText');
 const tagHint = document.querySelector('#tagHint');
@@ -16,10 +17,16 @@ const timeline = document.querySelector('#timeline');
 const timelineFill = document.querySelector('#timelineFill');
 const timelineCursor = document.querySelector('#timelineCursor');
 const tagCount = document.querySelector('#tagCount');
+const databaseName = 'clipmark-projects';
+const databaseVersion = 1;
+const projectStoreName = 'projects';
+const lastProjectId = 'last-project';
 const storagePrefix = 'clipmark:tags:';
 let tags = [];
 let videoUrl = null;
 let activeStorageKey = null;
+let currentVideoFile = null;
+let projectSaved = false;
 
 const formatTime = (seconds) => {
   const total = Math.max(0, Math.floor(seconds || 0));
@@ -34,6 +41,38 @@ const createStorageKey = (file) => [
   file.size,
   file.lastModified
 ].join(':');
+
+function openProjectDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName, databaseVersion);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(projectStoreName, { keyPath: 'id' });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readSavedProject() {
+  const database = await openProjectDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(projectStoreName, 'readonly');
+    const request = transaction.objectStore(projectStoreName).get(lastProjectId);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => database.close();
+  });
+}
+
+async function writeSavedProject(project) {
+  const database = await openProjectDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(projectStoreName, 'readwrite');
+    transaction.objectStore(projectStoreName).put(project);
+    transaction.oncomplete = () => { database.close(); resolve(); };
+    transaction.onerror = () => { database.close(); reject(transaction.error); };
+  });
+}
 
 function loadSavedTags(file) {
   activeStorageKey = createStorageKey(file);
@@ -52,6 +91,48 @@ function loadSavedTags(file) {
 function saveTags() {
   if (!activeStorageKey) return;
   localStorage.setItem(activeStorageKey, JSON.stringify(tags));
+  if (projectSaved) saveCurrentProject({ quiet: true });
+}
+
+async function saveCurrentProject({ quiet = false } = {}) {
+  if (!currentVideoFile) {
+    tagHint.textContent = '请先导入视频。';
+    return;
+  }
+  saveProjectButton.disabled = true;
+  saveProjectButton.textContent = '保存中';
+  try {
+    await writeSavedProject({
+      id: lastProjectId,
+      fileName: currentVideoFile.name,
+      fileType: currentVideoFile.type,
+      fileSize: currentVideoFile.size,
+      fileLastModified: currentVideoFile.lastModified,
+      savedAt: Date.now(),
+      video: currentVideoFile,
+      tags
+    });
+    projectSaved = true;
+    if (!quiet) tagHint.textContent = `已保存视频和 ${tags.length} 个标签。`;
+  } catch {
+    tagHint.textContent = '保存失败，请检查浏览器存储权限或剩余空间。';
+  } finally {
+    saveProjectButton.disabled = false;
+    saveProjectButton.textContent = '保存';
+  }
+}
+
+function loadVideoFile(file, nextTags, hint) {
+  if (videoUrl) URL.revokeObjectURL(videoUrl);
+  currentVideoFile = file;
+  activeStorageKey = createStorageKey(file);
+  videoUrl = URL.createObjectURL(file);
+  video.src = videoUrl;
+  tags = nextTags;
+  document.querySelector('#fileName').textContent = file.name;
+  emptyState.hidden = true;
+  saveProjectButton.disabled = false;
+  tagHint.textContent = hint;
 }
 
 function updateProgress() {
@@ -94,13 +175,13 @@ function renderTags() {
 videoInput.addEventListener('change', () => {
   const [file] = videoInput.files;
   if (!file) return;
-  if (videoUrl) URL.revokeObjectURL(videoUrl);
-  videoUrl = URL.createObjectURL(file);
-  video.src = videoUrl;
-  tags = loadSavedTags(file);
-  document.querySelector('#fileName').textContent = file.name;
-  emptyState.hidden = true;
-  tagHint.textContent = tags.length ? `已读取 ${tags.length} 个保存的标签。` : '标签将自动保存到浏览器本地。';
+  const savedTags = loadSavedTags(file);
+  projectSaved = false;
+  loadVideoFile(
+    file,
+    savedTags,
+    savedTags.length ? `已读取 ${savedTags.length} 个保存的标签。` : '点击“保存”可保存视频和标签。'
+  );
 });
 
 video.addEventListener('loadedmetadata', () => {
@@ -114,6 +195,7 @@ video.addEventListener('play', () => { playButton.textContent = 'Ⅱ'; playButto
 video.addEventListener('pause', () => { playButton.textContent = '▶'; playButton.setAttribute('aria-label', '播放'); });
 playButton.addEventListener('click', () => video.paused ? video.play() : video.pause());
 muteButton.addEventListener('click', () => { video.muted = !video.muted; muteButton.textContent = video.muted ? '◌' : '◖'; });
+saveProjectButton.addEventListener('click', () => saveCurrentProject());
 scrubber.addEventListener('input', () => seekTo(Number(scrubber.value)));
 timeline.addEventListener('click', (event) => { const bounds = timeline.getBoundingClientRect(); seekTo(((event.clientX - bounds.left) / bounds.width) * video.duration); });
 tagForm.addEventListener('submit', (event) => {
@@ -126,4 +208,21 @@ tagForm.addEventListener('submit', (event) => {
   tagText.value = ''; tagHint.textContent = `已添加：${formatTime(video.currentTime)}`;
   saveTags();
   renderTags();
+});
+
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const savedProject = await readSavedProject();
+    if (!savedProject?.video) return;
+    const file = new File(
+      [savedProject.video],
+      savedProject.fileName || 'saved-video',
+      { type: savedProject.fileType || savedProject.video.type, lastModified: savedProject.fileLastModified || Date.now() }
+    );
+    tags = Array.isArray(savedProject.tags) ? savedProject.tags : [];
+    projectSaved = true;
+    loadVideoFile(file, tags, `已自动读取上次保存的视频和 ${tags.length} 个标签。`);
+  } catch {
+    tagHint.textContent = '未能读取上次保存的视频。';
+  }
 });

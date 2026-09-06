@@ -9,8 +9,12 @@ button { cursor: pointer; }
 .brand-dot { width: 13px; height: 13px; border-radius: 50%; background: #f56e46; box-shadow: 0 0 0 5px rgba(245,110,70,.13); }
 .project-name { display: flex; gap: 11px; align-items: baseline; color: #778092; font-size: 13px; border-left: 1px solid rgba(255,255,255,.12); padding-left: 27px; }
 .project-name strong { color: #c8cdd8; font-weight: 500; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.import-button, .primary-button { margin-left: auto; border: 0; border-radius: 9px; padding: 11px 17px; color: #17191e; background: #f4f5f7; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .15s, background .15s; }
-.import-button:hover, .primary-button:hover { transform: translateY(-1px); background: #fff; }
+.topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.import-button, .primary-button, .save-button { border: 0; border-radius: 9px; padding: 11px 17px; color: #17191e; background: #f4f5f7; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .15s, background .15s, opacity .15s; }
+.import-button:hover, .primary-button:hover, .save-button:hover:not(:disabled) { transform: translateY(-1px); background: #fff; }
+.save-button { color: #f6f7fb; background: #263141; }
+.save-button:hover:not(:disabled) { background: #313d50; }
+.save-button:disabled { cursor: not-allowed; opacity: .45; }
 .import-button input { display: none; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 332px; gap: 28px; padding-top: 35px; }
 .player-panel { min-width: 0; }
@@ -42,4 +46,4 @@ h2 { margin: 0; font-size: 21px; letter-spacing: -.5px; } .panel-heading span { 
 .timeline { height: 16px; position: relative; border-radius: 12px; background: #242a34; cursor: pointer; } .timeline-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: inherit; background: linear-gradient(90deg, #ef6947, #f7a15c); } .timeline-cursor { position: absolute; top: -5px; width: 2px; height: 26px; background: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,.17); transform: translateX(-1px); }
 .markers { position: absolute; inset: 0; } .marker { position: absolute; top: -8px; width: 3px; height: 32px; padding: 0; border: 0; border-radius: 2px; background: #b7c6df; transform: translateX(-1px); } .marker:hover { background: #fff; } .marker::after { content: attr(data-label); position: absolute; left: 0; bottom: 35px; display: none; width: max-content; max-width: 160px; padding: 5px 7px; border-radius: 4px; color: #eef1f7; background: #313947; font: 11px 'Noto Sans SC', sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .marker:hover::after { display: block; }
 @media (max-width: 850px) { .app-shell { padding: 0 18px 35px; } .workspace { grid-template-columns: 1fr; } .video-stage { min-height: 340px; } .tag-panel { min-height: auto; } .tag-list { max-height: 250px; } }
-@media (max-width: 540px) { .topbar { height: 76px; gap: 14px; } .project-name { display: none; } .import-button { padding: 9px 11px; font-size: 12px; } .video-stage { min-height: 260px; } }
+@media (max-width: 540px) { .topbar { height: 76px; gap: 14px; } .project-name { display: none; } .import-button, .save-button { padding: 9px 11px; font-size: 12px; } .video-stage { min-height: 260px; } }
