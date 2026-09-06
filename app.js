@@ -9,6 +9,7 @@ const playButton = document.querySelector('#playButton');
 const forwardButton = document.querySelector('#forwardButton');
 const muteButton = document.querySelector('#muteButton');
 const saveProjectButton = document.querySelector('#saveProjectButton');
+const saveLocalButton = document.querySelector('#saveLocalButton');
 const tagForm = document.querySelector('#tagForm');
 const tagText = document.querySelector('#tagText');
 const tagHint = document.querySelector('#tagHint');
@@ -190,6 +191,78 @@ function sanitizeTags(nextTags) {
     .sort((first, second) => first.time - second.time);
 }
 
+function getBaseFileName(fileName) {
+  const dotIndex = fileName.lastIndexOf('.');
+  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+}
+
+function getExportFileName(fileName, extension) {
+  return `${getBaseFileName(fileName).replace(/[\\/:*?"<>|]/g, '_')}${extension}`;
+}
+
+function getProjectExport() {
+  return {
+    app: 'ClipMark',
+    version: 1,
+    savedAt: new Date().toISOString(),
+    video: {
+      name: currentVideoFile.name,
+      type: currentVideoFile.type,
+      size: currentVideoFile.size,
+      lastModified: currentVideoFile.lastModified
+    },
+    tags
+  };
+}
+
+function downloadBlob(blob, fileName) {
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function saveProjectLocally() {
+  if (!currentVideoFile) {
+    tagHint.textContent = '请先导入视频。';
+    return;
+  }
+  saveLocalButton.disabled = true;
+  saveLocalButton.textContent = '保存中';
+  try {
+    await saveCurrentProject({ quiet: true });
+    const labelFileName = getExportFileName(currentVideoFile.name, '.clipmark.json');
+    const labelBlob = new Blob([JSON.stringify(getProjectExport(), null, 2)], { type: 'application/json' });
+    if ('showDirectoryPicker' in window) {
+      const directory = await window.showDirectoryPicker();
+      const videoHandle = await directory.getFileHandle(currentVideoFile.name, { create: true });
+      const videoWritable = await videoHandle.createWritable();
+      await videoWritable.write(currentVideoFile);
+      await videoWritable.close();
+      const labelHandle = await directory.getFileHandle(labelFileName, { create: true });
+      const labelWritable = await labelHandle.createWritable();
+      await labelWritable.write(labelBlob);
+      await labelWritable.close();
+      tagHint.textContent = `已保存视频和标签文件到本地文件夹。`;
+    } else {
+      downloadBlob(currentVideoFile, currentVideoFile.name);
+      downloadBlob(labelBlob, labelFileName);
+      tagHint.textContent = '已下载视频和标签文件到浏览器默认下载位置。';
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      tagHint.textContent = '已取消保存到本地。';
+    } else {
+      tagHint.textContent = '保存到本地失败，请检查浏览器权限或剩余空间。';
+    }
+  } finally {
+    saveLocalButton.disabled = false;
+    saveLocalButton.textContent = '保存到本地';
+  }
+}
+
 function saveTags() {
   if (!activeStorageKey) return;
   localStorage.setItem(activeStorageKey, JSON.stringify(tags));
@@ -248,6 +321,7 @@ function loadVideoFile(file, nextTags, hint) {
   document.querySelector('#fileName').textContent = file.name;
   emptyState.hidden = true;
   saveProjectButton.disabled = false;
+  saveLocalButton.disabled = false;
   tagHint.textContent = hint;
   renderRecentProjects();
 }
@@ -321,6 +395,7 @@ playButton.addEventListener('click', () => video.paused ? video.play() : video.p
 forwardButton.addEventListener('click', () => skipBy(5));
 muteButton.addEventListener('click', () => { video.muted = !video.muted; muteButton.textContent = video.muted ? '◌' : '◖'; });
 saveProjectButton.addEventListener('click', () => saveCurrentProject());
+saveLocalButton.addEventListener('click', () => saveProjectLocally());
 scrubber.addEventListener('input', () => seekTo(Number(scrubber.value)));
 timeline.addEventListener('click', (event) => { const bounds = timeline.getBoundingClientRect(); seekTo(((event.clientX - bounds.left) / bounds.width) * video.duration); });
 tagForm.addEventListener('submit', (event) => {
