@@ -47,13 +47,11 @@ video { display: block; max-width: 100%; max-height: 620px; width: 100%; }
 .eyebrow { color: #f56e46; margin: 0 0 4px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .12em; }
 h2 { margin: 0; font-size: 21px; letter-spacing: -.5px; } .panel-heading span { color: #7e8797; font-size: 12px; }
 .tag-form { padding: 19px 0 16px; border-bottom: 1px solid rgba(255,255,255,.08); } .tag-form label { display: block; margin-bottom: 9px; color: #b8c0cd; font-size: 12px; }
-.tag-button-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-.tag-button-card { display: grid; gap: 6px; padding: 8px; border: 1px solid #343b49; border-radius: 8px; background: #171b23; }
-.tag-preset-button { width: 100%; min-width: 0; height: 38px; padding: 0 10px; border: 0; border-radius: 7px; color: #17191e; background: var(--tag-color, #f56e46); font-size: 12px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-button-list { display: grid; gap: 7px; }
+.tag-button-card { display: grid; grid-template-columns: minmax(0, 1fr) 58px; gap: 7px; padding: 7px; border: 1px solid #343b49; border-radius: 8px; background: #171b23; }
+.tag-preset-button { width: 100%; min-width: 0; height: 32px; padding: 0 10px; border: 0; border-radius: 7px; color: #17191e; background: var(--tag-color, #f56e46); font-size: 12px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag-preset-button:hover { filter: brightness(1.08); }
-.tag-button-tools { display: grid; grid-template-columns: 34px 1fr; gap: 6px; align-items: center; }
-.tag-color-picker { width: 34px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
-.rename-button { height: 26px; border: 0; border-radius: 6px; color: #c8d0dd; background: #263141; font-size: 11px; font-weight: 700; }
+.rename-button { height: 32px; border: 0; border-radius: 7px; color: #c8d0dd; background: #263141; font-size: 11px; font-weight: 700; }
 .rename-button:hover { color: #fff; background: #313d50; }
 .tag-button-help { margin: 9px 0 0; color: #778092; font-size: 11px; line-height: 1.5; }
 #tagHint { margin: 7px 0 0; min-height: 15px; color: #778092; font-size: 11px; }

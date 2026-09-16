@@ -36,6 +36,7 @@ const defaultTagPresets = [
   { text: '待剪', color: '#b884f7' },
   { text: '结尾', color: '#ff7aa2' }
 ];
+const tagPalette = ['#f56e46', '#ffd166', '#62d26f', '#6ea8fe', '#b884f7', '#ff7aa2', '#2dd4bf', '#f97316'];
 let tags = [];
 let videoUrl = null;
 let activeStorageKey = null;
@@ -223,19 +224,25 @@ function saveTagPresets() {
   localStorage.setItem(tagPresetsKey, JSON.stringify(tagPresets));
 }
 
-function renameTagPreset(index) {
+function updateTagPresetName(index, text) {
   const currentPreset = tagPresets[index];
-  const nextName = prompt('输入新的标签按钮名称', currentPreset.text);
-  if (!nextName) return;
-  const text = nextName.trim().slice(0, 20);
-  if (!text) return;
-  tagPresets[index] = { ...currentPreset, text };
+  tagPresets[index] = { ...currentPreset, text: text.trim().slice(0, 20) || currentPreset.text };
   saveTagPresets();
   renderTagPresetButtons();
 }
 
-function updateTagPresetColor(index, color) {
-  tagPresets[index] = { ...tagPresets[index], color: sanitizeColor(color) };
+function renameTagPreset(index) {
+  const currentPreset = tagPresets[index];
+  const nextName = prompt('输入新的标签按钮名称', currentPreset.text);
+  if (!nextName) return;
+  updateTagPresetName(index, nextName);
+}
+
+function rotateTagPresetColor(index) {
+  const currentColor = sanitizeColor(tagPresets[index].color);
+  const currentIndex = tagPalette.indexOf(currentColor);
+  const nextColor = tagPalette[(currentIndex + 1) % tagPalette.length];
+  tagPresets[index] = { ...tagPresets[index], color: nextColor };
   saveTagPresets();
   renderTagPresetButtons();
 }
@@ -262,23 +269,16 @@ function renderTagPresetButtons() {
     button.type = 'button';
     button.textContent = preset.text;
     button.style.setProperty('--tag-color', sanitizeColor(preset.color));
-    button.setAttribute('aria-label', `添加 ${preset.text} 标签`);
-    button.addEventListener('click', () => addTagFromPreset(preset));
-    const tools = document.createElement('div');
-    tools.className = 'tag-button-tools';
-    const colorInput = document.createElement('input');
-    colorInput.className = 'tag-color-picker';
-    colorInput.type = 'color';
-    colorInput.value = sanitizeColor(preset.color);
-    colorInput.setAttribute('aria-label', `设置 ${preset.text} 颜色`);
-    colorInput.addEventListener('input', () => updateTagPresetColor(index, colorInput.value));
+    button.setAttribute('aria-label', `添加 ${preset.text} 标签，双击切换颜色`);
+    button.title = '点击添加标签，双击切换颜色';
+    button.addEventListener('click', () => addTagFromPreset(tagPresets[index]));
+    button.addEventListener('dblclick', (event) => { event.preventDefault(); rotateTagPresetColor(index); });
     const renameButton = document.createElement('button');
     renameButton.className = 'rename-button';
     renameButton.type = 'button';
     renameButton.textContent = '改名';
     renameButton.addEventListener('click', () => renameTagPreset(index));
-    tools.append(colorInput, renameButton);
-    card.append(button, tools);
+    card.append(button, renameButton);
     tagButtonList.append(card);
   });
 }
