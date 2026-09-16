@@ -11,7 +11,7 @@ const muteButton = document.querySelector('#muteButton');
 const saveProjectButton = document.querySelector('#saveProjectButton');
 const saveLocalButton = document.querySelector('#saveLocalButton');
 const tagForm = document.querySelector('#tagForm');
-const tagText = document.querySelector('#tagText');
+const tagButtonList = document.querySelector('#tagButtonList');
 const tagHint = document.querySelector('#tagHint');
 const tagList = document.querySelector('#tagList');
 const tagTemplate = document.querySelector('#tagTemplate');
@@ -28,12 +28,23 @@ const projectStoreName = 'projects';
 const lastProjectId = 'last-project';
 const storagePrefix = 'clipmark:tags:';
 const recentProjectsKey = 'clipmark:recent-projects';
+const tagPresetsKey = 'clipmark:tag-presets';
 const maxRecentProjects = 8;
+const defaultTagColor = '#f56e46';
+const defaultTagPresets = [
+  { text: '开场', color: '#f56e46' },
+  { text: '重点', color: '#ffd166' },
+  { text: '精彩', color: '#62d26f' },
+  { text: '问题', color: '#6ea8fe' },
+  { text: '待剪', color: '#b884f7' },
+  { text: '结尾', color: '#ff7aa2' }
+];
 let tags = [];
 let videoUrl = null;
 let activeStorageKey = null;
 let currentVideoFile = null;
 let projectSaved = false;
+let tagPresets = loadTagPresets();
 
 const formatTime = (seconds) => {
   const total = Math.max(0, Math.floor(seconds || 0));
@@ -187,8 +198,92 @@ function sanitizeTags(nextTags) {
   if (!Array.isArray(nextTags)) return [];
   return nextTags
     .filter((tag) => Number.isFinite(tag.time) && typeof tag.text === 'string' && tag.text.trim())
-    .map((tag) => ({ time: Math.max(0, tag.time), text: tag.text.trim() }))
+    .map((tag) => ({ time: Math.max(0, tag.time), text: tag.text.trim(), color: sanitizeColor(tag.color) }))
     .sort((first, second) => first.time - second.time);
+}
+
+function sanitizeColor(color) {
+  return /^#[0-9a-f]{6}$/i.test(color || '') ? color : defaultTagColor;
+}
+
+function loadTagPresets() {
+  try {
+    const savedPresets = JSON.parse(localStorage.getItem(tagPresetsKey) || '[]');
+    if (!Array.isArray(savedPresets) || !savedPresets.length) return defaultTagPresets;
+    return defaultTagPresets.map((preset, index) => {
+      const savedPreset = savedPresets[index] || {};
+      return {
+        text: typeof savedPreset.text === 'string' && savedPreset.text.trim() ? savedPreset.text.trim() : preset.text,
+        color: sanitizeColor(savedPreset.color || preset.color)
+      };
+    });
+  } catch {
+    return defaultTagPresets;
+  }
+}
+
+function saveTagPresets() {
+  localStorage.setItem(tagPresetsKey, JSON.stringify(tagPresets));
+}
+
+function renameTagPreset(index) {
+  const currentPreset = tagPresets[index];
+  const nextName = prompt('输入新的标签按钮名称', currentPreset.text);
+  if (!nextName) return;
+  const text = nextName.trim().slice(0, 20);
+  if (!text) return;
+  tagPresets[index] = { ...currentPreset, text };
+  saveTagPresets();
+  renderTagPresetButtons();
+}
+
+function updateTagPresetColor(index, color) {
+  tagPresets[index] = { ...tagPresets[index], color: sanitizeColor(color) };
+  saveTagPresets();
+  renderTagPresetButtons();
+}
+
+function addTagFromPreset(preset) {
+  if (!video.duration) {
+    tagHint.textContent = '请先导入视频。';
+    return;
+  }
+  tags.push({ time: video.currentTime, text: preset.text, color: preset.color });
+  tags.sort((first, second) => first.time - second.time);
+  tagHint.textContent = `已添加：${preset.text} · ${formatTime(video.currentTime)}`;
+  saveTags();
+  renderTags();
+}
+
+function renderTagPresetButtons() {
+  tagButtonList.innerHTML = '';
+  tagPresets.forEach((preset, index) => {
+    const card = document.createElement('div');
+    card.className = 'tag-button-card';
+    const button = document.createElement('button');
+    button.className = 'tag-preset-button';
+    button.type = 'button';
+    button.textContent = preset.text;
+    button.style.setProperty('--tag-color', sanitizeColor(preset.color));
+    button.setAttribute('aria-label', `添加 ${preset.text} 标签`);
+    button.addEventListener('click', () => addTagFromPreset(preset));
+    const tools = document.createElement('div');
+    tools.className = 'tag-button-tools';
+    const colorInput = document.createElement('input');
+    colorInput.className = 'tag-color-picker';
+    colorInput.type = 'color';
+    colorInput.value = sanitizeColor(preset.color);
+    colorInput.setAttribute('aria-label', `设置 ${preset.text} 颜色`);
+    colorInput.addEventListener('input', () => updateTagPresetColor(index, colorInput.value));
+    const renameButton = document.createElement('button');
+    renameButton.className = 'rename-button';
+    renameButton.type = 'button';
+    renameButton.textContent = '改名';
+    renameButton.addEventListener('click', () => renameTagPreset(index));
+    tools.append(colorInput, renameButton);
+    card.append(button, tools);
+    tagButtonList.append(card);
+  });
 }
 
 function getBaseFileName(fileName) {
@@ -317,7 +412,7 @@ function loadVideoFile(file, nextTags, hint) {
   activeStorageKey = createStorageKey(file);
   videoUrl = URL.createObjectURL(file);
   video.src = videoUrl;
-  tags = nextTags;
+  tags = sanitizeTags(nextTags);
   document.querySelector('#fileName').textContent = file.name;
   emptyState.hidden = true;
   saveProjectButton.disabled = false;
@@ -352,8 +447,11 @@ function renderTags() {
   markers.innerHTML = '';
   if (!tags.length) tagList.innerHTML = '<div class="tag-placeholder">你的标签会出现在这里</div>';
   tags.forEach((tag, index) => {
+    const color = sanitizeColor(tag.color);
     const card = tagTemplate.content.cloneNode(true);
+    const article = card.querySelector('.tag-card');
     const main = card.querySelector('.tag-main');
+    article.style.setProperty('--tag-color', color);
     card.querySelector('time').textContent = formatTime(tag.time);
     card.querySelector('.tag-title').textContent = tag.text;
     main.addEventListener('click', () => { seekTo(tag.time); video.play(); });
@@ -361,6 +459,7 @@ function renderTags() {
     tagList.append(card);
     const marker = document.createElement('button');
     marker.className = 'marker'; marker.type = 'button'; marker.style.left = `${(tag.time / video.duration) * 100}%`;
+    marker.style.background = color;
     marker.dataset.label = `${formatTime(tag.time)} · ${tag.text}`;
     marker.setAttribute('aria-label', `跳转到 ${tag.text}`);
     marker.addEventListener('click', (event) => { event.stopPropagation(); seekTo(tag.time); video.play(); });
@@ -398,19 +497,10 @@ saveProjectButton.addEventListener('click', () => saveCurrentProject());
 saveLocalButton.addEventListener('click', () => saveProjectLocally());
 scrubber.addEventListener('input', () => seekTo(Number(scrubber.value)));
 timeline.addEventListener('click', (event) => { const bounds = timeline.getBoundingClientRect(); seekTo(((event.clientX - bounds.left) / bounds.width) * video.duration); });
-tagForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const text = tagText.value.trim();
-  if (!video.duration) { tagHint.textContent = '请先导入视频。'; return; }
-  if (!text) { tagHint.textContent = '请为这个时间点填写标签。'; tagText.focus(); return; }
-  tags.push({ time: video.currentTime, text });
-  tags.sort((first, second) => first.time - second.time);
-  tagText.value = ''; tagHint.textContent = `已添加：${formatTime(video.currentTime)}`;
-  saveTags();
-  renderTags();
-});
+tagForm.addEventListener('submit', (event) => event.preventDefault());
 
 window.addEventListener('DOMContentLoaded', async () => {
+  renderTagPresetButtons();
   renderRecentProjects();
   try {
     const savedProject = await readSavedProject();
