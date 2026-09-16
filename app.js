@@ -17,10 +17,7 @@ const tagList = document.querySelector('#tagList');
 const tagTemplate = document.querySelector('#tagTemplate');
 const recentList = document.querySelector('#recentList');
 const recentCount = document.querySelector('#recentCount');
-const markers = document.querySelector('#markers');
-const timeline = document.querySelector('#timeline');
-const timelineFill = document.querySelector('#timelineFill');
-const timelineCursor = document.querySelector('#timelineCursor');
+const timelineRows = document.querySelector('#timelineRows');
 const tagCount = document.querySelector('#tagCount');
 const databaseName = 'clipmark-projects';
 const databaseVersion = 1;
@@ -427,8 +424,8 @@ function updateProgress() {
   document.querySelector('#currentTime').textContent = formatTime(video.currentTime);
   document.querySelector('#timelineNow').textContent = formatTime(video.currentTime);
   scrubber.value = video.currentTime;
-  timelineFill.style.width = `${percent}%`;
-  timelineCursor.style.left = `${percent}%`;
+  document.querySelectorAll('.timeline-fill').forEach((fill) => { fill.style.width = `${percent}%`; });
+  document.querySelectorAll('.timeline-cursor').forEach((cursor) => { cursor.style.left = `${percent}%`; });
 }
 
 function seekTo(seconds) {
@@ -441,10 +438,67 @@ function skipBy(seconds) {
   seekTo(video.currentTime + seconds);
 }
 
+function getTagGroups() {
+  const groups = new Map();
+  tags.forEach((tag) => {
+    const color = sanitizeColor(tag.color);
+    const key = `${tag.text}::${color}`;
+    if (!groups.has(key)) groups.set(key, { text: tag.text, color, tags: [] });
+    groups.get(key).tags.push(tag);
+  });
+  return Array.from(groups.values());
+}
+
+function renderTimelineRows() {
+  timelineRows.innerHTML = '';
+  const groups = getTagGroups();
+  if (!groups.length) {
+    timelineRows.innerHTML = '<div class="timeline-row empty">添加标签后，每种标签会拥有一条独立进度条</div>';
+    return;
+  }
+  const duration = video.duration || 0;
+  groups.forEach((group) => {
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+    const label = document.createElement('div');
+    label.className = 'timeline-label';
+    label.style.setProperty('--tag-color', group.color);
+    label.innerHTML = `<span></span><strong></strong><em>${group.tags.length}</em>`;
+    label.querySelector('strong').textContent = group.text;
+    const track = document.createElement('div');
+    track.className = 'timeline';
+    track.setAttribute('aria-label', `${group.text} 标签时间轴`);
+    const fill = document.createElement('div');
+    fill.className = 'timeline-fill';
+    const cursor = document.createElement('div');
+    cursor.className = 'timeline-cursor';
+    const markersWrap = document.createElement('div');
+    markersWrap.className = 'markers';
+    group.tags.forEach((tag) => {
+      const marker = document.createElement('button');
+      marker.className = 'marker';
+      marker.type = 'button';
+      marker.style.left = `${duration ? (tag.time / duration) * 100 : 0}%`;
+      marker.style.background = group.color;
+      marker.dataset.label = `${formatTime(tag.time)} · ${tag.text}`;
+      marker.setAttribute('aria-label', `跳转到 ${tag.text}`);
+      marker.addEventListener('click', (event) => { event.stopPropagation(); seekTo(tag.time); video.play(); });
+      markersWrap.append(marker);
+    });
+    track.addEventListener('click', (event) => {
+      const bounds = track.getBoundingClientRect();
+      seekTo(((event.clientX - bounds.left) / bounds.width) * video.duration);
+    });
+    track.append(fill, cursor, markersWrap);
+    row.append(label, track);
+    timelineRows.append(row);
+  });
+  updateProgress();
+}
+
 function renderTags() {
   tagCount.textContent = `${tags.length} 个`;
   tagList.innerHTML = '';
-  markers.innerHTML = '';
   if (!tags.length) tagList.innerHTML = '<div class="tag-placeholder">你的标签会出现在这里</div>';
   tags.forEach((tag, index) => {
     const color = sanitizeColor(tag.color);
@@ -457,14 +511,8 @@ function renderTags() {
     main.addEventListener('click', () => { seekTo(tag.time); video.play(); });
     card.querySelector('.delete-button').addEventListener('click', () => { tags.splice(index, 1); saveTags(); renderTags(); });
     tagList.append(card);
-    const marker = document.createElement('button');
-    marker.className = 'marker'; marker.type = 'button'; marker.style.left = `${(tag.time / video.duration) * 100}%`;
-    marker.style.background = color;
-    marker.dataset.label = `${formatTime(tag.time)} · ${tag.text}`;
-    marker.setAttribute('aria-label', `跳转到 ${tag.text}`);
-    marker.addEventListener('click', (event) => { event.stopPropagation(); seekTo(tag.time); video.play(); });
-    markers.append(marker);
   });
+  renderTimelineRows();
 }
 
 videoInput.addEventListener('change', () => {
@@ -496,7 +544,6 @@ muteButton.addEventListener('click', () => { video.muted = !video.muted; muteBut
 saveProjectButton.addEventListener('click', () => saveCurrentProject());
 saveLocalButton.addEventListener('click', () => saveProjectLocally());
 scrubber.addEventListener('input', () => seekTo(Number(scrubber.value)));
-timeline.addEventListener('click', (event) => { const bounds = timeline.getBoundingClientRect(); seekTo(((event.clientX - bounds.left) / bounds.width) * video.duration); });
 tagForm.addEventListener('submit', (event) => event.preventDefault());
 
 window.addEventListener('DOMContentLoaded', async () => {
