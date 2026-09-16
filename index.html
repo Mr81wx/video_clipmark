@@ -14,6 +14,15 @@
       <header class="topbar">
         <a class="brand" href="#" aria-label="ClipMark 首页"><span class="brand-dot"></span>ClipMark</a>
         <div class="project-name"><span>本地项目</span><strong id="fileName">未载入视频</strong></div>
+        <section class="recent-section" aria-labelledby="recentHeading">
+          <button class="recent-toggle" type="button">
+            <span id="recentHeading">最近项目</span>
+            <strong id="recentCount">0 个</strong>
+          </button>
+          <div class="recent-list" id="recentList">
+            <div class="recent-placeholder">保存或导入视频后会出现在这里</div>
+          </div>
+        </section>
         <div class="topbar-actions">
           <button class="save-button" id="saveProjectButton" type="button" disabled>保存</button>
           <button class="save-button" id="saveLocalButton" type="button" disabled>保存到本地</button>
@@ -51,12 +60,6 @@
             <p class="tag-button-help">点击按钮添加标签，使用色块和“改名”自定义按钮。</p>
             <p id="tagHint">先导入视频，再创建标签。</p>
           </form>
-          <section class="recent-section" aria-labelledby="recentHeading">
-            <div class="recent-heading"><h3 id="recentHeading">最近项目</h3><span id="recentCount">0 个</span></div>
-            <div class="recent-list" id="recentList">
-              <div class="recent-placeholder">保存或导入视频后会出现在这里</div>
-            </div>
-          </section>
           <div class="tag-list" id="tagList">
             <div class="tag-placeholder">你的标签会出现在这里</div>
           </div>
