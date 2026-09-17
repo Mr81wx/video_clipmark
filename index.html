@@ -31,6 +31,16 @@
       </header>
 
       <section class="workspace">
+        <aside class="existing-tags-panel" aria-labelledby="existingTagsHeading">
+          <div class="existing-tags-heading">
+            <p class="eyebrow">已有标注</p>
+            <h2 id="existingTagsHeading">已有标签</h2>
+          </div>
+          <div class="tag-list" id="tagList">
+            <div class="tag-placeholder">你的标签会出现在这里</div>
+          </div>
+        </aside>
+
         <div class="player-panel">
           <div class="video-stage" id="videoStage">
             <video id="video" preload="metadata"></video>
@@ -60,9 +70,6 @@
             <p class="tag-button-help">单点标签点击即添加；区间标签点击两次设置开始和结束。双击标签换色。</p>
             <p id="tagHint">先导入视频，再创建标签。</p>
           </form>
-          <div class="tag-list" id="tagList">
-            <div class="tag-placeholder">你的标签会出现在这里</div>
-          </div>
         </aside>
       </section>
 
