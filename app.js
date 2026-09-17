@@ -29,12 +29,12 @@ const tagPresetsKey = 'clipmark:tag-presets';
 const maxRecentProjects = 8;
 const defaultTagColor = '#f56e46';
 const defaultTagPresets = [
-  { text: '开场', color: '#f56e46' },
-  { text: '重点', color: '#ffd166' },
-  { text: '精彩', color: '#62d26f' },
-  { text: '问题', color: '#6ea8fe' },
-  { text: '待剪', color: '#b884f7' },
-  { text: '结尾', color: '#ff7aa2' }
+  { text: '开场', color: '#f56e46', mode: 'point' },
+  { text: '重点', color: '#ffd166', mode: 'point' },
+  { text: '精彩', color: '#62d26f', mode: 'point' },
+  { text: '问题', color: '#6ea8fe', mode: 'point' },
+  { text: '待剪', color: '#b884f7', mode: 'range' },
+  { text: '结尾', color: '#ff7aa2', mode: 'point' }
 ];
 const tagPalette = ['#f56e46', '#ffd166', '#62d26f', '#6ea8fe', '#b884f7', '#ff7aa2', '#2dd4bf', '#f97316'];
 let tags = [];
@@ -43,6 +43,7 @@ let activeStorageKey = null;
 let currentVideoFile = null;
 let projectSaved = false;
 let tagPresets = loadTagPresets();
+let pendingRange = null;
 
 const formatTime = (seconds) => {
   const total = Math.max(0, Math.floor(seconds || 0));
@@ -196,7 +197,18 @@ function sanitizeTags(nextTags) {
   if (!Array.isArray(nextTags)) return [];
   return nextTags
     .filter((tag) => Number.isFinite(tag.time) && typeof tag.text === 'string' && tag.text.trim())
-    .map((tag) => ({ time: Math.max(0, tag.time), text: tag.text.trim(), color: sanitizeColor(tag.color) }))
+    .map((tag) => {
+      const mode = tag.mode === 'range' && Number.isFinite(tag.endTime) ? 'range' : 'point';
+      const time = Math.max(0, tag.time);
+      const endTime = mode === 'range' ? Math.max(0, tag.endTime) : null;
+      return {
+        time: mode === 'range' ? Math.min(time, endTime) : time,
+        endTime: mode === 'range' ? Math.max(time, endTime) : null,
+        mode,
+        text: tag.text.trim(),
+        color: sanitizeColor(tag.color)
+      };
+    })
     .sort((first, second) => first.time - second.time);
 }
 
@@ -212,7 +224,8 @@ function loadTagPresets() {
       const savedPreset = savedPresets[index] || {};
       return {
         text: typeof savedPreset.text === 'string' && savedPreset.text.trim() ? savedPreset.text.trim() : preset.text,
-        color: sanitizeColor(savedPreset.color || preset.color)
+        color: sanitizeColor(savedPreset.color || preset.color),
+        mode: savedPreset.mode === 'range' ? 'range' : preset.mode
       };
     });
   } catch {
@@ -247,16 +260,39 @@ function rotateTagPresetColor(index) {
   renderTagPresetButtons();
 }
 
+function toggleTagPresetMode(index) {
+  tagPresets[index] = { ...tagPresets[index], mode: tagPresets[index].mode === 'range' ? 'point' : 'range' };
+  if (pendingRange?.index === index) pendingRange = null;
+  saveTagPresets();
+  renderTagPresetButtons();
+}
+
 function addTagFromPreset(preset) {
   if (!video.duration) {
     tagHint.textContent = '请先导入视频。';
     return;
   }
-  tags.push({ time: video.currentTime, text: preset.text, color: preset.color });
+  if (preset.mode === 'range') {
+    const presetIndex = tagPresets.indexOf(preset);
+    if (!pendingRange || pendingRange.index !== presetIndex) {
+      pendingRange = { index: presetIndex, time: video.currentTime, text: preset.text, color: preset.color };
+      tagHint.textContent = `已设置 ${preset.text} 开始：${formatTime(video.currentTime)}，再次点击设置结束。`;
+      renderTagPresetButtons();
+      return;
+    }
+    const startTime = Math.min(pendingRange.time, video.currentTime);
+    const endTime = Math.max(pendingRange.time, video.currentTime);
+    tags.push({ time: startTime, endTime, mode: 'range', text: preset.text, color: preset.color });
+    pendingRange = null;
+    tagHint.textContent = `已添加区间：${preset.text} · ${formatTime(startTime)}-${formatTime(endTime)}`;
+  } else {
+    tags.push({ time: video.currentTime, endTime: null, mode: 'point', text: preset.text, color: preset.color });
+    tagHint.textContent = `已添加：${preset.text} · ${formatTime(video.currentTime)}`;
+  }
   tags.sort((first, second) => first.time - second.time);
-  tagHint.textContent = `已添加：${preset.text} · ${formatTime(video.currentTime)}`;
   saveTags();
   renderTags();
+  renderTagPresetButtons();
 }
 
 function renderTagPresetButtons() {
@@ -264,6 +300,7 @@ function renderTagPresetButtons() {
   tagPresets.forEach((preset, index) => {
     const card = document.createElement('div');
     card.className = 'tag-button-card';
+    if (pendingRange?.index === index) card.classList.add('range-pending');
     const button = document.createElement('button');
     button.className = 'tag-preset-button';
     button.type = 'button';
@@ -278,7 +315,13 @@ function renderTagPresetButtons() {
     renameButton.type = 'button';
     renameButton.textContent = '改名';
     renameButton.addEventListener('click', () => renameTagPreset(index));
-    card.append(button, renameButton);
+    const modeButton = document.createElement('button');
+    modeButton.className = 'mode-button';
+    modeButton.type = 'button';
+    modeButton.textContent = preset.mode === 'range' ? '区间' : '单点';
+    modeButton.setAttribute('aria-label', `切换 ${preset.text} 标签类型`);
+    modeButton.addEventListener('click', () => toggleTagPresetMode(index));
+    card.append(button, modeButton, renameButton);
     tagButtonList.append(card);
   });
 }
@@ -475,15 +518,30 @@ function renderTimelineRows() {
     const markersWrap = document.createElement('div');
     markersWrap.className = 'markers';
     group.tags.forEach((tag) => {
-      const marker = document.createElement('button');
-      marker.className = 'marker';
-      marker.type = 'button';
-      marker.style.left = `${duration ? (tag.time / duration) * 100 : 0}%`;
-      marker.style.background = group.color;
-      marker.dataset.label = `${formatTime(tag.time)} · ${tag.text}`;
-      marker.setAttribute('aria-label', `跳转到 ${tag.text}`);
-      marker.addEventListener('click', (event) => { event.stopPropagation(); seekTo(tag.time); video.play(); });
-      markersWrap.append(marker);
+      if (tag.mode === 'range') {
+        const range = document.createElement('button');
+        const left = duration ? (tag.time / duration) * 100 : 0;
+        const right = duration ? (tag.endTime / duration) * 100 : left;
+        range.className = 'range-marker';
+        range.type = 'button';
+        range.style.left = `${left}%`;
+        range.style.width = `${Math.max(right - left, 0.35)}%`;
+        range.style.background = group.color;
+        range.dataset.label = `${formatTime(tag.time)}-${formatTime(tag.endTime)} · ${tag.text}`;
+        range.setAttribute('aria-label', `跳转到 ${tag.text} 区间`);
+        range.addEventListener('click', (event) => { event.stopPropagation(); seekTo(tag.time); video.play(); });
+        markersWrap.append(range);
+      } else {
+        const marker = document.createElement('button');
+        marker.className = 'marker';
+        marker.type = 'button';
+        marker.style.left = `${duration ? (tag.time / duration) * 100 : 0}%`;
+        marker.style.background = group.color;
+        marker.dataset.label = `${formatTime(tag.time)} · ${tag.text}`;
+        marker.setAttribute('aria-label', `跳转到 ${tag.text}`);
+        marker.addEventListener('click', (event) => { event.stopPropagation(); seekTo(tag.time); video.play(); });
+        markersWrap.append(marker);
+      }
     });
     track.addEventListener('click', (event) => {
       const bounds = track.getBoundingClientRect();
@@ -506,7 +564,7 @@ function renderTags() {
     const article = card.querySelector('.tag-card');
     const main = card.querySelector('.tag-main');
     article.style.setProperty('--tag-color', color);
-    card.querySelector('time').textContent = formatTime(tag.time);
+    card.querySelector('time').textContent = tag.mode === 'range' ? `${formatTime(tag.time)}-${formatTime(tag.endTime)}` : formatTime(tag.time);
     card.querySelector('.tag-title').textContent = tag.text;
     main.addEventListener('click', () => { seekTo(tag.time); video.play(); });
     card.querySelector('.delete-button').addEventListener('click', () => { tags.splice(index, 1); saveTags(); renderTags(); });
