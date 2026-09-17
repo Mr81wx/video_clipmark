@@ -1,5 +1,6 @@
 const video = document.querySelector('#video');
 const videoInput = document.querySelector('#videoInput');
+const projectInput = document.querySelector('#projectInput');
 const emptyState = document.querySelector('#emptyState');
 const controls = document.querySelector('#controls');
 const timelineSection = document.querySelector('#timelineSection');
@@ -359,6 +360,47 @@ function downloadBlob(blob, fileName) {
   URL.revokeObjectURL(url);
 }
 
+function readJsonFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        resolve(JSON.parse(reader.result));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
+async function loadLocalProjectFiles(files) {
+  const projectFiles = Array.from(files);
+  const videoFile = projectFiles.find((file) => file.type.startsWith('video/'));
+  const jsonFile = projectFiles.find((file) => file.name.endsWith('.clipmark.json') || file.type === 'application/json');
+  if (!jsonFile) {
+    tagHint.textContent = '请选择保存到本地时生成的 .clipmark.json 文件。';
+    return;
+  }
+  try {
+    const project = await readJsonFile(jsonFile);
+    const projectTags = sanitizeTags(project.tags);
+    const file = videoFile || currentVideoFile;
+    if (!file) {
+      tagHint.textContent = '请同时选择视频文件，或先导入视频后再导入标签文件。';
+      return;
+    }
+    pendingRange = null;
+    projectSaved = false;
+    loadVideoFile(file, projectTags, `已从本地项目读取 ${projectTags.length} 个标签。`);
+    localStorage.setItem(activeStorageKey, JSON.stringify(tags));
+    upsertRecentProject(file);
+  } catch {
+    tagHint.textContent = '项目文件读取失败，请确认 JSON 文件来自 ClipMark。';
+  }
+}
+
 async function saveProjectLocally() {
   if (!currentVideoFile) {
     tagHint.textContent = '请先导入视频。';
@@ -584,6 +626,12 @@ videoInput.addEventListener('change', () => {
     savedTags.length ? `已读取 ${savedTags.length} 个保存的标签。` : '点击“保存”可保存视频和标签。'
   );
   upsertRecentProject(file);
+});
+
+projectInput.addEventListener('change', async () => {
+  if (!projectInput.files.length) return;
+  await loadLocalProjectFiles(projectInput.files);
+  projectInput.value = '';
 });
 
 video.addEventListener('loadedmetadata', () => {
